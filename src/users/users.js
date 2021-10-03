@@ -1,8 +1,7 @@
 import { Router } from "express"
 import createError from "http-errors"
 import UserModel from "./schema.js"
-import { JWTAuthMiddleware } from "../../auth/middlewares.js"
-import { uploadOnCloudinary } from "../../lib/cloudinary.js"
+import { JWTAuthMiddleware } from "../auth/middlewares.js"
 import q2m from "query-to-mongo"
 
 const usersRouter = Router()

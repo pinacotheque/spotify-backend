@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken"
-import UserModel from "../services/users/schema.js"
+import UserModel from "../users/schema.js"
 
 export const JWTAuthenticate = async (user) => {
   const accessToken = await generateJWT({ _id: user._id })
@@ -11,13 +11,13 @@ export const JWTAuthenticate = async (user) => {
 
 const generateJWT = (payload) =>
   new Promise((resolve, reject) =>
-    jwt.sign(payload, 
-      process.env.JWT_SECRET, 
-      { expiresIn: "15m" }, 
+    jwt.sign(payload,
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" },
       (err, token) => {
-      if (err) reject(err)
-      resolve(token)
-    })
+        if (err) reject(err)
+        resolve(token)
+      })
   )
 
 const generateRefreshJWT = (payload) =>
