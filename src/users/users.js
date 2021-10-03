@@ -1,136 +1,116 @@
 import { Router } from "express"
 import createError from "http-errors"
-import UserModel from "./schema.js"
+import User from "./schema.js";
 import { JWTAuthMiddleware } from "../auth/middlewares.js"
 import q2m from "query-to-mongo"
 
 const usersRouter = Router()
 
-/***************GET ALL USERS*******************/
-
-usersRouter.get("/", async (req, res, next) => {
+usersRouter.post("/register", async (req, res, next) => {
     try {
-        const query = q2m(req.query)
-        const { total, users } = await UserModel.findUsers(query)
-        res.send({ links: query.links("/users", total), total, users })
+        const newUser = new User(req.body);
+        const { _id } = await newUser.save();
+        res.status(201).send({ _id });
     } catch (error) {
-        console.log(error)
-        next(createError(500, "Error in getting users"))
+        next(error);
     }
-})
+});
 
-/***************GET ONLY YOUR USER DETAILS*******************/
+//************* CHECKS CREDENTIALS, RETURNS NEW ACCESS TOKEN *************** \\
+
+usersRouter.post("/login", async (req, res, next) => {
+    try {
+        const { email, password } = req.body;
+        const user = await User.checkCredentials(email, password);
+        if (user) {
+            const accessToken = await JWTAuthenticate(user);
+            res.send({ accessToken });
+        } else {
+            next(createError(401, "Credentials not valid!"));
+        }
+    } catch (error) {
+        next(error);
+    }
+});
+
+//************* GET ALL USERS *************** \\
+
+usersRouter.get("/", JWTAuthMiddleware, async (req, res, next) => {
+    try {
+        const users = await getUser.find({});
+        res.send(users);
+    } catch (error) {
+        next(createError(500, "An error occurred while getting users"));
+    }
+});
+
+// ************* GET LOGGED IN USER INFO *************** \\
 
 usersRouter.get("/me", JWTAuthMiddleware, async (req, res, next) => {
     try {
-        res.send(req.user)
-    } catch (error) {
-        console.log(error)
-        next(error)
-    }
-})
-
-/***************GET USER DEATILS BY SPECIFIC ID*******************/
-
-usersRouter.get("/:userId", async (req, res, next) => {
-    try {
-        const userId = req.params.userId
-        const user = await UserModel.findById(userId)
-        if (user) {
-            res.send(user)
-        } else {
-            next(createError(404, `user with id: ${userId} not found`))
-        }
-    } catch (error) {
-        next(createError(500, "Error in getting user"))
-    }
-})
-
-/***************EDIT ONLY YOUR USER DEATILS*******************/
-
-usersRouter.put("/me", JWTAuthMiddleware, async (req, res, next) => {
-    try {
-        const body = req.user
-        body.name = req.body.name ? req.body.name : body.name
-        body.surname = req.body.surname ? req.body.surname : body.surname
-        body.username = req.body.username ? req.body.username : body.username
-        body.email = req.body.email ? req.body.email : body.email
-        body.avatar = req.body.avatar ? req.body.avatar : body.avatar
-        const editUser = await body.save()
-        res.send(editUser)
-    } catch (error) {
-        console.log(error)
-        next(error)
-    }
-})
-
-/***************EDIT USER DEATILS BY ID*******************/
-
-usersRouter.put("/:userId", async (req, res, next) => {
-    try {
-        const userId = req.params.userId
-        const editUser = await UserModel.findByIdAndUpdate(userId, req.body, {
-            new: true,
-            runValidators: true,
-        })
-        if (editUser) {
-            res.send(editUser)
-        } else {
-            next(createError(404, `user with id: ${userId} not found`))
-        }
-    } catch (error) {
-        next(createError(500, "Error in editing user"))
-    }
-})
-
-/***************DELETE ONLY YOUR USER DEATILS*******************/
-
-usersRouter.delete("/me", JWTAuthMiddleware, async (req, res, next) => {
-    try {
-        await req.user.deleteOne()
-        res.status(204).send()
-    } catch (error) {
-        console.log(error)
-        next(error)
-    }
-})
-
-/***************DELETE USER DETAILS BY ID*******************/
-
-usersRouter.delete("/:userId", async (req, res, next) => {
-    try {
-        const userId = req.params.userId
-        const deletedUser = await UserModel.findByIdAndDelete(userId)
-        if (deletedUser) {
-            res.status(204).send()
-        } else {
-            next(createError(404, `user with id ${userId} not found`))
-        }
-    } catch (error) {
-        next(createError(500, "Error in deleting user"))
-    }
-}
-)
-
-/*******************************UPLOAD ON CLOUDINARY*******************************/
-/*
-usersRouter.post("/me/cover", uploadOnCloudinary, JWTAuthMiddleware, async (req, res, next) => {
-    try {
-        const userId = req.user._id
-        const newAvatar = { avatar: req.file.path }
-        const updatedAvatar = await UserModel.findByIdAndUpdate(userId, newAvatar, {
-            new: true
-        })
-        if (!updatedAvatar) {
-            return next(createError(404, "user not found"))
-        } else {
-            res.send(updatedAvatar)
-        }
+        res.send(req.user);
     } catch (error) {
         console.log(error);
+        next(createError(500, "An error occurred while finding you"));
+    }
+});
+
+// ************* GET SPECIFIC USER BY ID *************** \\
+
+usersRouter.get("/:id", JWTAuthMiddleware, async (req, res, next) => {
+    try {
+        const author = await User.getUser(req.params.id);
+        author ? res.send(author) : next(createError(404, `User ${req.params.id} not found`));
+    } catch (error) {
+        next(error);
+    }
+});
+
+// ************* UPDATE USER INFO BY ID *************** \\
+
+usersRouter.put("/:id", JWTAuthMiddleware, async (req, res, next) => {
+    try {
+        const userId = req.params.id.toString()
+        const myId = req.user._id.toString()
+
+        if (userId === myId) {
+            const updatedUser = await User.findOneAndUpdate({ _id: myId }, req.body, { new: true, runValidators: true })
+            if (updatedUser) {
+                res.send(updatedUser)
+            } else {
+                next(createError(404, `User Not Found!`))
+            }
+        } else {
+            next(createError(404, `You are not authorized!`))
+        }
+    } catch (error) {
         next(error)
     }
-}
-*/
+
+});
+
+// ************* DELETE USER BY ID *************** \\
+
+usersRouter.delete("/:id", JWTAuthMiddleware, async (req, res, next) => {
+    try {
+        const userId = req.params.id.toString()
+        const myId = req.user._id.toString()
+
+        if (userId === myId) {
+            const deletedUser = await User.findOneAndDelete({ _id: myId })
+            if (deletedUser) {
+                res.status(204).send()
+            } else {
+                next(createError(404, `User Not Found!`))
+            }
+        } else {
+            next(createError(404, `You are not authorized!`))
+        }
+    } catch (error) {
+        next(error)
+    }
+
+});
+
 
 export default usersRouter
